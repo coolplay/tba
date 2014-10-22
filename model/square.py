@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 
 
 class Model():
-    def __init__(self, M, N, nb=1):
+    def __init__(self, M, N, nb=1, nbr=1):
         self.M = M
         self.N = N
         self.nb = nb
@@ -20,8 +20,9 @@ class Model():
                        ]
         self.sites = self.get_sites()
         self.nsite = len(self.sites)
-        self.pairs = self.get_pairs()
+        self.pairs = self.get_pairs(nbr=nbr)
         self.hoppings = self.get_hoppings(self.kind)
+        self.basis = self.get_basis()
 
     def int2pair(self, int):
         """Site index translation"""
@@ -43,7 +44,7 @@ class Model():
         assert len(sites) == M*N
         return sites
 
-    def get_pairs(self, zsite=True):
+    def get_pairs(self, nbr=3):
         """Find hopping pairs for given kind.
 
         Return complex coordinate if zsite is True
@@ -51,29 +52,30 @@ class Model():
         assert self.kind == ['NN']
         M, N = self.M, self.N
         pairs = []
-        for z in self.sites:
+        for zj in self.sites:
             ptmp = []
             # deltas[:n] for hoppings up to nth neighbor
-            dzs = (dz for dzz in self.deltas[:1] for dz in dzz)
-            for dz in dzs:
-                z2 = z + dz
+            zs = (z for zs in self.deltas[:nbr] for z in zs)
+            for z in zs:
+                zk = zj - z
+                zk = zk.real % M, zk.imag % N
+                ptmp.append((self.pair2int(zk), z))
                 # coordinate for z2 in PBC
                 # z2 = complex(z2.real % M, z2.imag % N)
-                ptmp.append(self.pair2int((z2.real % M, z2.imag % N)))
                 # if zsite:
                 #     ptmp.append(z2)
             pairs.append(ptmp)
-        # check for duplicate
-        pairs_ = []
-        for i, ps in enumerate(pairs):
-            tmp = []
-            for j in ps:
-                if i < j:
-                    # will remove j in pairs
-                    tmp.append(j)
-            pairs_.append(tmp)
+        # # check for duplicate
+        # pairs_ = []
+        # for i, ps in enumerate(pairs):
+        #     tmp = []
+        #     for j in ps:
+        #         if i < j:
+        #             # will remove j in pairs
+        #             tmp.append(j)
+        #     pairs_.append(tmp)
 
-        pairs = pairs_
+        # pairs = pairs_
         assert len(pairs) == len(self.sites)
         return pairs
 
@@ -89,25 +91,28 @@ class Model():
             return w * e
         # sum over NN lattice transiton (Kapit2010). abs(R) = L
         # Rs = (0,)
-        Rs = (0, 1*M, 1j*N, -1*M, -1j*N)
+        # Rs = (0, 1*M, 1j*N, -1*M, -1j*N)
         hoppings = []
-        # convert to complex coordinate
-        pairs = ((self.sites[zk] for zk in zks) for zks in self.pairs)
-        for zj, zks in zip(self.sites, pairs):
-            tmp = []
-            for zk in zks:
-                z = zk - zj
-                # closest distance is distance
-                z = min((z+R for R in Rs), key=lambda z: abs(z))
+        for si, zj in enumerate(self.sites):
+            hoppings.append([J(zj, z) for sk, z in self.pairs[si]])
 
-                hopping = sum(J(zj, z+R) *
-                              np.exp(np.pi/2*(zj*R.conjugate()-zj.conjugate()*R)
-                                     * phi)
-                              for R in Rs)
-                hopping = J(zj, z)
-                hopping = -1
-                tmp.append(hopping)
-            hoppings.append(tmp)
+        # # convert to complex coordinate
+        # pairs = ((self.sites[zk] for zk in zks) for zks in self.pairs)
+        # for zj, zks in zip(self.sites, pairs):
+        #     tmp = []
+        #     for zk in zks:
+        #         z = zk - zj
+        #         # closest distance is distance
+        #         z = min((z+R for R in Rs), key=lambda z: abs(z))
+
+        #         hopping = sum(J(zj, z+R) *
+        #                       np.exp(np.pi/2*(zj*R.conjugate()-zj.conjugate()*R)
+        #                              * phi)
+        #                       for R in Rs)
+        #         hopping = J(zj, z)
+        #         hopping = -1
+        #         tmp.append(hopping)
+        #     hoppings.append(tmp)
         assert len(hoppings) == len(self.sites)
         return hoppings
 
@@ -153,31 +158,28 @@ class Model():
 
     def get_hamiltonian(self, mat):
         """Return the hamiltonian of the model"""
-        assert self.nb == 1
-        # for i, (s, nbrs, hoppings) in enumerate(zip(basis, self.pairs, self.hoppings)):
-        #     for nbr, hopping in zip(nbrs, hoppings):
-        #         # XXX j
-        #        j = basis.index(nbr)
-        for i, (js, hoppings) in enumerate(zip(self.pairs, self.hoppings)):
-            for j, hopping in zip(js, hoppings):
-                mat[i, j] = hopping
-                mat[j, i] = hopping.conjugate()
+        for n in self.basis:
+            for j in xrange(self.nsite):
+                for i, k in enumerate(k for k, z in self.pairs[j]):
+                    if ((n&2**j)>>j, (n&2**k)>>k) == (0, 1):
+                        m = n ^ (2**j + 2**k)
+                        mi, ni = self.basis.index(m), self.basis.index(n)
+                        mat[mi, ni] += self.hoppings[j][i]
+
         return mat
 
 if __name__ == '__main__':
     M = 12
     m = Model(M, M, nb=1)
-    basis = m.get_basis()
-    nst = len(basis)
-#   for b in basis[:15]:
-#       print format(b, '016b')
-#   print len(basis)
+    nst = len(m.basis)
 
     # Construct Hamiltonian matrix
     mat = np.zeros((nst, nst), dtype=complex)
-    mat = m.get_hamiltonian(mat)
-
-    # Diagonalize Hamiltonian
-    val, vec = np.linalg.eigh(mat)
-    plt.plot(val, 'ro')
+    for nbr in [1, 2, 4]:
+        m = Model(M, M, nb=1, nbr=nbr)
+        mat = m.get_hamiltonian(mat)
+        # Diagonalize Hamiltonian
+        val, vec = np.linalg.eigh(mat)
+        plt.plot(val, 'o')
+        mat[:] = 0
     plt.show()
