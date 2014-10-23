@@ -1,15 +1,16 @@
 """Implete lattice model with LLL"""
 import numpy as np
 import matplotlib.pyplot as plt
+import bisect
 
 
 class Model():
-    def __init__(self, M, N, nb=1, nbr=1):
+    def __init__(self, M, N, nb=1, nbr=1, phi=0.5):
         self.M = M
         self.N = N
         self.nb = nb
         self.kind = ['NN']
-        self.phi = 1./3 #0.5
+        self.phi = phi
         # deltas[:n] for hoppings up to nth neighbor
         self.deltas = [(1+0j, 0+1j, -1+0j, 0-1j),
                        (1+1j, -1+1j, -1-1j, 1-1j),
@@ -44,7 +45,7 @@ class Model():
         assert len(sites) == M*N
         return sites
 
-    def get_pairs(self, nbr=3):
+    def get_pairs(self, nbr=1):
         """Find hopping pairs for given kind.
 
         Return complex coordinate if zsite is True
@@ -65,17 +66,6 @@ class Model():
                 # if zsite:
                 #     ptmp.append(z2)
             pairs.append(ptmp)
-        # # check for duplicate
-        # pairs_ = []
-        # for i, ps in enumerate(pairs):
-        #     tmp = []
-        #     for j in ps:
-        #         if i < j:
-        #             # will remove j in pairs
-        #             tmp.append(j)
-        #     pairs_.append(tmp)
-
-        # pairs = pairs_
         assert len(pairs) == len(self.sites)
         return pairs
 
@@ -138,6 +128,14 @@ class Model():
                     basis.append(i)
         return basis
 
+    def get_index(self, state):
+        'Locate the leftmost value exactly equal to state in basis'
+        basis = self.basis
+        i = bisect.bisect_left(basis, state)
+        if i != len(basis) and basis[i] == state:
+            return i
+        return -1
+
     def _samebits_int(self, v):
         """Generate a sequence of integer with same number of 1 bits in binary form.
 
@@ -147,39 +145,75 @@ class Model():
         if v == 0:
             yield v
             raise StopIteration
-
         # maximum = 2**nn
         maximum = 2**self.nsite
         while v < maximum:
-    #       print('{:0{}b}'.format(v, nn))
+            # print('{:0{}b}'.format(v, nn))
             yield v
             t = (v | (v - 1)) + 1
             v = t | ((((t & -t) // (v & -v)) >> 1) - 1)
 
     def get_hamiltonian(self, mat):
         """Return the hamiltonian of the model"""
-        for n in self.basis:
+        basis = self.basis
+        # get_index = self.get_index
+        for n in basis:
             for j in xrange(self.nsite):
-                for i, k in enumerate(k for k, z in self.pairs[j]):
-                    if ((n&2**j)>>j, (n&2**k)>>k) == (0, 1):
+                for (k, _), t_jk in zip(self.pairs[j], self.hoppings[j]):
+                    # if ((n&2**j)>>j, (n&2**k)>>k) == (0, 1):
+                    if n & (2**j+2**k) == 2**k:
                         m = n ^ (2**j + 2**k)
-                        mi, ni = self.basis.index(m), self.basis.index(n)
-                        mat[mi, ni] += self.hoppings[j][i]
+                        mi, ni = basis.index(m), basis.index(n)
+                        # mi, ni = get_index(m), get_index(n)
+                        mat[mi, ni] += t_jk
 
         return mat
 
-if __name__ == '__main__':
-    M = 12
-    m = Model(M, M, nb=1)
-    nst = len(m.basis)
 
+def fig1():
+    M, N = 12, 12
+    m = Model(M, N, nb=1)
+    nst = len(m.basis)
     # Construct Hamiltonian matrix
     mat = np.zeros((nst, nst), dtype=complex)
-    for nbr in [1, 2, 4]:
-        m = Model(M, M, nb=1, nbr=nbr)
+    fig, ax = plt.subplots(figsize=(8, 4))
+    plt.axhline(linestyle='--')
+    for nbr, style in zip([1, 2, 4], ['gs', 'ko', 'wo']):
+        m = Model(M, M, nb=1, nbr=nbr, phi=1./3)
         mat = m.get_hamiltonian(mat)
         # Diagonalize Hamiltonian
         val, vec = np.linalg.eigh(mat)
-        plt.plot(val, 'o')
+        plt.plot(val, style, linestyle='')
         mat[:] = 0
-    plt.show()
+    # plt.show()
+    plt.xlim(-2, 150)
+    plt.ylim(-1.1, 1.)
+    plt.xlabel(r'$n$')
+    plt.ylabel(r'$\epsilon_n$')
+    plt.savefig('data/fig1.pdf')
+
+
+def fig2():
+    M, N = 4, 4
+    m = Model(M, N, nb=4, nbr=4, phi=1./2)
+    nst = len(m.basis)
+    print 'nst: {}'.format(nst)
+    # Construct Hamiltonian matrix
+    mat = np.zeros((nst, nst), dtype=complex)
+    # fig, ax = plt.subplots(figsize=(8, 4))
+    mat = m.get_hamiltonian(mat)
+    # Diagonalize Hamiltonian
+    val, vec = np.linalg.eigh(mat)
+    fig, ax = plt.subplots(figsize=(9, 6))
+    plt.plot(val[:101], 'bo')
+    plt.xlim(-2, 101)
+    plt.ylim(-4.05, -2.9)
+    plt.xlabel(r'$n$')
+    plt.ylabel(r'$\epsilon_n$')
+    # plt.show()
+    plt.savefig('data/fig2.pdf')
+
+
+if __name__ == '__main__':
+    pass
+    # main()
