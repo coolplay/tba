@@ -5,11 +5,10 @@ import bisect
 
 
 class Model():
-    def __init__(self, M, N, nb=1, nbr=1, phi=0.5):
+    def __init__(self, M, N, nb=1, nbr=1, phi=0.5, bc='pbc'):
         self.M = M
         self.N = N
         self.nb = nb
-        self.kind = ['NN']
         self.phi = phi
         # deltas[:n] for hoppings up to nth neighbor
         self.deltas = [(1+0j, 0+1j, -1+0j, 0-1j),
@@ -22,7 +21,7 @@ class Model():
         self.sites = self.get_sites()
         self.nsite = len(self.sites)
         self.pairs = self.get_pairs(nbr=nbr)
-        self.hoppings = self.get_hoppings(self.kind)
+        self.hoppings = self.get_hoppings(bc=bc)
         self.basis = self.get_basis()
 
     def int2pair(self, int):
@@ -45,12 +44,11 @@ class Model():
         assert len(sites) == M*N
         return sites
 
-    def get_pairs(self, nbr=1):
+    def get_pairs(self, nbr):
         """Find hopping pairs for given kind.
 
         Return complex coordinate if zsite is True
         """
-        assert self.kind == ['NN']
         M, N = self.M, self.N
         pairs = []
         for zj in self.sites:
@@ -69,7 +67,7 @@ class Model():
         assert len(pairs) == len(self.sites)
         return pairs
 
-    def get_hoppings(self, kind):
+    def get_hoppings(self, bc):
         """Calculate hopping strength for each pair"""
         M, N = self.M, self.N
         phi = self.phi
@@ -80,29 +78,23 @@ class Model():
             e = np.exp(np.pi/2*(zj*z.conjugate() - zj.conjugate()*z)*phi)
             return w * e
         # sum over NN lattice transiton (Kapit2010). abs(R) = L
-        # Rs = (0,)
-        # Rs = (0, 1*M, 1j*N, -1*M, -1j*N)
+        if bc == 'pbc':
+            Rs = (0,)
+        # magneto-periodic boundary condition
+        elif bc == 'mpbc':
+            Rs = (0, 1*M, 1j*N, -1*M, -1j*N)
+        else:
+            raise NotImplemented
+
         hoppings = []
         for si, zj in enumerate(self.sites):
-            hoppings.append([J(zj, z) for sk, z in self.pairs[si]])
+            # hoppings.append([J(zj, z) for sk, z in self.pairs[si]])
+            # generator will result in wrong answer! consume only once
+            es = [np.exp(np.pi/2*(zj*R.conjugate()-zj.conjugate()*R)*phi)
+                  for R in Rs]
+            hoppings.append([sum(J(zj, z+R)*e for R, e in zip(Rs, es))
+                             for sk, z in self.pairs[si]])
 
-        # # convert to complex coordinate
-        # pairs = ((self.sites[zk] for zk in zks) for zks in self.pairs)
-        # for zj, zks in zip(self.sites, pairs):
-        #     tmp = []
-        #     for zk in zks:
-        #         z = zk - zj
-        #         # closest distance is distance
-        #         z = min((z+R for R in Rs), key=lambda z: abs(z))
-
-        #         hopping = sum(J(zj, z+R) *
-        #                       np.exp(np.pi/2*(zj*R.conjugate()-zj.conjugate()*R)
-        #                              * phi)
-        #                       for R in Rs)
-        #         hopping = J(zj, z)
-        #         hopping = -1
-        #         tmp.append(hopping)
-        #     hoppings.append(tmp)
         assert len(hoppings) == len(self.sites)
         return hoppings
 
@@ -172,6 +164,7 @@ class Model():
 
 def fig1():
     M, N = 12, 12
+    M, N = 4, 4
     m = Model(M, N, nb=1)
     nst = len(m.basis)
     # Construct Hamiltonian matrix
@@ -186,16 +179,16 @@ def fig1():
         plt.plot(val, style, linestyle='')
         mat[:] = 0
     # plt.show()
-    plt.xlim(-2, 150)
-    plt.ylim(-1.1, 1.)
+    # plt.xlim(-2, 150)
+    # plt.ylim(-1.1, 1.)
     plt.xlabel(r'$n$')
     plt.ylabel(r'$\epsilon_n$')
-    plt.savefig('data/fig1.pdf')
+    plt.savefig('data/fig1_mpbc.pdf')
 
 
 def fig2():
     M, N = 4, 4
-    m = Model(M, N, nb=4, nbr=4, phi=1./2)
+    m = Model(M, N, nb=4, nbr=5, phi=1./2)
     nst = len(m.basis)
     print 'nst: {}'.format(nst)
     # Construct Hamiltonian matrix
@@ -205,15 +198,16 @@ def fig2():
     # Diagonalize Hamiltonian
     val, vec = np.linalg.eigh(mat)
     fig, ax = plt.subplots(figsize=(9, 6))
-    plt.plot(val[:101], 'bo')
-    plt.xlim(-2, 101)
+    plt.plot(range(1, 101), val[:100], 'bo', mew=0)
+    plt.xlim(-1, 101)
     plt.ylim(-4.05, -2.9)
     plt.xlabel(r'$n$')
     plt.ylabel(r'$\epsilon_n$')
     # plt.show()
     plt.savefig('data/fig2.pdf')
+    return val, vec
 
 
 if __name__ == '__main__':
-    pass
+    e, v = fig2()
     # main()
