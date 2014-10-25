@@ -1,6 +1,7 @@
 """Implete lattice model with LLL"""
 import numpy as np
 import matplotlib.pyplot as plt
+# from numba import jit
 import bisect
 
 
@@ -164,7 +165,6 @@ class Model():
 
 def fig1():
     M, N = 12, 12
-    M, N = 4, 4
     m = Model(M, N, nb=1)
     nst = len(m.basis)
     # Construct Hamiltonian matrix
@@ -178,12 +178,12 @@ def fig1():
         val, vec = np.linalg.eigh(mat)
         plt.plot(val, style, linestyle='')
         mat[:] = 0
-    # plt.show()
-    # plt.xlim(-2, 150)
-    # plt.ylim(-1.1, 1.)
+    plt.xlim(-2, 150)
+    plt.ylim(-1.1, 1.)
     plt.xlabel(r'$n$')
     plt.ylabel(r'$\epsilon_n$')
-    plt.savefig('data/fig1_mpbc.pdf')
+    # plt.show()
+    plt.savefig('data/fig1.pdf')
 
 
 def fig2():
@@ -208,6 +208,29 @@ def fig2():
     return val, vec
 
 
+def fig_phis(phis=np.linspace(0.3, 0.5, 20)):
+    M, N = 12, 12
+    m = Model(M, N, nb=1)
+    nst = len(m.basis)
+    print 'nst: {}'.format(nst)
+    # Construct Hamiltonian matrix
+    mat = np.zeros((nst, nst), dtype=complex)
+    fig, ax = plt.subplots(figsize=(8, 6))
+    for phi in phis:
+        m = Model(M, N, phi=phi, nbr=4)
+        mat = m.get_hamiltonian(mat)
+        # Diagonalize Hamiltonian
+        val, vec = np.linalg.eigh(mat)
+        plt.plot(phi*np.ones(val.shape), val, '.', ms=1)
+        mat[:] = 0
+    # plt.xlim(-2, 150)
+    # plt.ylim(-1.1, 1.)
+    plt.xlabel(r'$\phi$')
+    plt.ylabel(r'$\epsilon_n$')
+    # plt.show()
+    plt.savefig('data/fig_phis.pdf')
+
+
 if __name__ == '__main__':
-    e, v = fig2()
+    fig_phis()
     # main()
