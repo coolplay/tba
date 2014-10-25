@@ -6,11 +6,13 @@ import bisect
 
 
 class Model():
-    def __init__(self, M, N, nb=1, nbr=1, phi=0.5, bc='pbc'):
+    def __init__(self, M, N, nb=1, nbr=1, phi=0.5, bc='pbc', mus={}):
         self.M = M
         self.N = N
         self.nb = nb
         self.phi = phi
+        # chemical potential: mus = {site: mu}
+        self.mus = mus
         # deltas[:n] for hoppings up to nth neighbor
         self.deltas = [(1+0j, 0+1j, -1+0j, 0-1j),
                        (1+1j, -1+1j, -1-1j, 1-1j),
@@ -150,21 +152,26 @@ class Model():
         """Return the hamiltonian of the model"""
         basis = self.basis
         # get_index = self.get_index
-        for n in basis:
+        for ni, n in enumerate(basis):
             for j in xrange(self.nsite):
                 for (k, _), t_jk in zip(self.pairs[j], self.hoppings[j]):
                     # if ((n&2**j)>>j, (n&2**k)>>k) == (0, 1):
                     if n & (2**j+2**k) == 2**k:
                         m = n ^ (2**j + 2**k)
-                        mi, ni = basis.index(m), basis.index(n)
+                        mi = basis.index(m)
                         # mi, ni = get_index(m), get_index(n)
                         mat[mi, ni] += t_jk
-
+            # chemical potential: mus = {site: mu}
+            for site in self.mus:
+                # if state & 2**site:
+                if n >> site & 1:
+                    mat[ni, ni] += self.mus[site]
         return mat
 
 
 def fig1():
     M, N = 12, 12
+    M, N = 6, 6
     m = Model(M, N, nb=1)
     nst = len(m.basis)
     # Construct Hamiltonian matrix
@@ -231,6 +238,54 @@ def fig_phis(phis=np.linspace(0.3, 0.5, 20)):
     plt.savefig('data/fig_phis.pdf')
 
 
+def fig_shape():
+    iphi = 10
+    shapes = [[i]*2 for i in range(5, 26, 5)]
+    fig, ax = plt.subplots(figsize=(9, 6))
+    for M, N in shapes:
+        m = Model(M, N, nbr=4, bc='mpbc', phi=1./iphi)
+        nst = len(m.basis)
+        print 'nst: {}'.format(nst)
+        # Construct Hamiltonian matrix
+        mat = np.zeros((nst, nst), dtype=complex)
+        # fig, ax = plt.subplots(figsize=(8, 4))
+        mat = m.get_hamiltonian(mat)
+        # Diagonalize Hamiltonian
+        val, vec = np.linalg.eigh(mat)
+        plt.plot(val[:100], 'o', mew=0,
+                 alpha=0.8, label='shape: {}X{}'.format(M, N))
+    plt.title(r'$\phi=1/{}$'.format(iphi))
+    plt.legend(loc='best')
+    # plt.xlim(-1, 101)
+    # plt.ylim(-3.1, -0.9)
+    plt.xlabel(r'$n$')
+    plt.ylabel(r'$\epsilon_n$')
+    # plt.show()
+    plt.savefig('data/fig_shape.pdf')
+
+
+def fig_mus():
+    M, N = 4, 4
+    m = Model(M, N, nb=3, nbr=5, phi=1./2, mus={0:10, 1:10})
+    nst = len(m.basis)
+    print 'nst: {}'.format(nst)
+    # Construct Hamiltonian matrix
+    mat = np.zeros((nst, nst), dtype=complex)
+    # fig, ax = plt.subplots(figsize=(8, 4))
+    mat = m.get_hamiltonian(mat)
+    # Diagonalize Hamiltonian
+    val, vec = np.linalg.eigh(mat)
+    fig, ax = plt.subplots(figsize=(9, 6))
+    plt.plot(val[:100], 'bo', mew=0)
+    plt.xlim(-1, 101)
+    plt.ylim(-3.1, -0.9)
+    plt.xlabel(r'$n$')
+    plt.ylabel(r'$\epsilon_n$')
+    # plt.show()
+    plt.savefig('data/fig_mus.pdf')
+    return val, vec
+
+
 if __name__ == '__main__':
-    fig_phis()
+    fig_shape()
     # main()
