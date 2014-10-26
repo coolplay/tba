@@ -1,6 +1,7 @@
 """Implete lattice model with LLL"""
 import numpy as np
 import matplotlib.pyplot as plt
+import scipy.linalg as la
 # from numba import jit
 import bisect
 
@@ -78,7 +79,14 @@ class Model():
         def J(zj, z):
             x, y = z.real, z.imag
             w = (-1)**(x+y+x*y) * np.exp(-np.pi/2*(1-phi)*abs(z)**2)
-            e = np.exp(np.pi/2*(zj*z.conjugate() - zj.conjugate()*z)*phi)
+            # Symmetric guage
+            # e = np.exp(np.pi/2*(zj*z.conjugate() - zj.conjugate()*z)*phi)
+            # Landau guage, 1xn
+            # yj = zj.imag
+            # e = np.exp(1j*np.pi*x*(2*yj-y)*phi)
+            # Landau guage, nx1
+            xj = zj.real
+            e = np.exp(1j*np.pi*(x-2*xj)*y*phi)
             return w * e
         # sum over NN lattice transiton (Kapit2010). abs(R) = L
         if bc == 'pbc':
@@ -168,10 +176,14 @@ class Model():
                     mat[ni, ni] += self.mus[site]
         return mat
 
+    def get_eigenpair(self, mat):
+        "Return eigenvalues and eigenvectors for mat"
+        # faster than np.linalg.eigh(mat)
+        return la.eigh(mat)
+
 
 def fig1():
     M, N = 12, 12
-    M, N = 6, 6
     m = Model(M, N, nb=1)
     nst = len(m.basis)
     # Construct Hamiltonian matrix
