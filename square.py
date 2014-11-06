@@ -24,7 +24,7 @@ class Model():
                        ]
         self.sites = self.get_sites()
         self.nsite = len(self.sites)
-        self.pairs = self.get_pairs(nbr=nbr)
+        self.pairs = self.get_pairs(nbr=nbr, bc=bc)
         self.hoppings = self.get_hoppings(bc=bc)
         self.basis = self.get_basis()
 
@@ -48,7 +48,7 @@ class Model():
         assert len(sites) == M*N
         return sites
 
-    def get_pairs(self, nbr):
+    def get_pairs(self, nbr, bc):
         """Find hopping pairs for given kind.
 
         Return complex coordinate if zsite is True
@@ -61,6 +61,9 @@ class Model():
             zs = (z for zs in self.deltas[:nbr] for z in zs)
             for z in zs:
                 zk = zj - z
+                # obc
+                if bc == 'obc' and not (0<=zk.real<M and 0<=zk.imag<N):
+                    continue
                 zk = zk.real % M, zk.imag % N
                 ptmp.append((self.pair2int(zk), z))
                 # coordinate for z2 in PBC
@@ -87,9 +90,10 @@ class Model():
             # Landau guage, nx1
             xj = zj.real
             e = np.exp(1j*np.pi*(x-2*xj)*y*phi)
+            # return e
             return w * e
         # sum over NN lattice transiton (Kapit2010). abs(R) = L
-        if bc == 'pbc':
+        if bc == 'pbc' or bc == 'obc':
             Rs = (0,)
         # magneto-periodic boundary condition
         elif bc == 'mpbc':
