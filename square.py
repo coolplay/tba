@@ -3,7 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import scipy.linalg as la
 # from numba import jit
-import bisect
+# import bisect
 
 
 class Model():
@@ -302,6 +302,77 @@ def fig_mus():
     return val, vec
 
 
+def braiding_path(sites=None, vimp=10, nstep=10):
+    """Generate sequence of mus for each pair (fr, to) in `sites`"""
+    if sites is None:
+        yield {}
+        return
+    vimp = float(vimp)
+    step = vimp/nstep
+    vimps = [[vimp-step*i, 0.0+step*i] for i in xrange(nstep)]
+    for vfr, vto in vimps:
+        for pairs in sites:
+            mus = {}
+            for sfr, sto in pairs:
+                mus[sfr] = mus.get(sfr, 0.0) + vfr
+                mus[sto] = mus.get(sto, 0.0) + vto
+            yield mus
+
+
+def braiding():
+    M, N = 4, 4
+    # pair1 = [12, 13, 14] + [14]*6 + [14, 10, 6]
+    # pair2 = [6]*3 + [6, 5, 4] + [4, 8, 12] + [12]*3
+    pair1 = [12, 13, 14, 14, 14, 14, 14, 14, 14, 14, 10,  6]
+    pair2 = [ 6,  6,  6,  6,  5,  4,  4,  8, 12, 12, 12, 12]
+    sites = [[pair1[i:i+2], pair2[i:i+2]] for i in range(len(pair1)-1)]
+    # mupath = list(braiding_path(sites))
+    m = Model(M, N, nb=3, nbr=4)
+    nst = len(m.basis)
+    print 'nst: {}'.format(nst)
+    # Construct Hamiltonian matrix
+    mat = np.zeros((nst, nst), dtype=complex)
+    print 'Calculating eigenstates: phis'.center(79, '=')
+    phis = []
+    # vals = []
+    for mus in braiding_path(sites, nstep=20):
+        m = Model(M, N, nb=3, nbr=4, mus=mus)
+        mat = m.get_hamiltonian(mat)
+        # make sure val are sorted
+        val, vec = m.get_eigenpair(mat)
+        phis.append(vec[:,:2])
+        # vals.append(val)
+        mat[:] = 0
+    print 'Calculating Berry matrix: ds'.center(79, '=')
+    ds = []
+    for i in xrange(len(phis)):
+        d = np.zeros((2, 2), dtype=complex)
+        for m in xrange(2):
+            for n in xrange(2):
+                d[m, n] = np.vdot(phis[i][:,m], phis[(i+1)%len(phis)][:,n])
+        ds.append(d)
+    print 'Calculating Berry phase: gamma'.center(79, '=')
+    D = 1.0
+    for d in ds:
+        D *= d
+    gamma = np.log(la.det(D)).imag
+    return gamma
+
+    # exam gap/width: gap is always open vimp=10 (min > 6)
+    # for v in vals:
+        # print (v[2]-v[1])/(v[1]-v[0])
+    # fig, ax = plt.subplots(figsize=(8, 6))
+    # for val in vals:
+        # plt.plot(val[:100], 's', ls='')
+    # plt.xlim(-2, 150)
+    # plt.ylim(-1.1, 1.)
+    # plt.xlabel(r'$n$')
+    # plt.ylabel(r'$\epsilon_n$')
+    # plt.show()
+    # plt.savefig('data/fig_phis.pdf')
+
+
 if __name__ == '__main__':
-    fig_shape()
+    # fig_shape()
+    print braiding()
     # main()
