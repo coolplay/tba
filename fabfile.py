@@ -1,4 +1,6 @@
 from fabric.api import local, run, cd, put
+import glob
+import os
 
 src = 'square.py'
 rdir = '~/run/physics/tba'
@@ -23,3 +25,9 @@ def binomial(m=96, n=2):
     m, n = int(m), int(n)
     import sympy
     print '\nnchoosek({}, {}) = {}'.format(m, n, sympy.binomial(m, n))
+
+
+def clean(patterns='*.pyc'):
+    for pattern in patterns.split():
+        for file in glob.glob(pattern):
+            os.remove(file)
